@@ -1,6 +1,5 @@
 package org.mbellani.pool;
 
-import static com.codahale.metrics.MetricRegistry.name;
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.collect.Lists.newArrayList;
 import static org.mbellani.utils.Net.getAddress;
@@ -17,9 +16,6 @@ import org.mbellani.zk.ZKClient.ZKTransWrapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.codahale.metrics.MetricRegistry;
-import com.codahale.metrics.Slf4jReporter;
-import com.codahale.metrics.Timer;
 import com.google.common.base.Throwables;
 import com.google.common.collect.Ordering;
 import com.google.common.primitives.Ints;
@@ -35,9 +31,6 @@ public class ZKObjectPool<T> implements ObjectPool<T> {
 	private ObjectFactory<T> factory;
 	private boolean shutdown;
 	private String id;
-	private MetricRegistry metrics = new MetricRegistry();
-	private Slf4jReporter reporter = Slf4jReporter.forRegistry(metrics)
-	        .outputTo(LoggerFactory.getLogger("org.mbellani.pool-perf")).build();
 	private TaskManager<T> taskManager;
 	private Ordering<String> nodeSorter = new Ordering<String>() {
 		public int compare(String leftNode, String rightNode) {
@@ -85,8 +78,6 @@ public class ZKObjectPool<T> implements ObjectPool<T> {
 	}
 
 	public void initialize() {
-		startMetricReporter();
-		Timer.Context ctx = metrics.timer(name(ZKObjectPool.class, "Initialization")).time();
 		try {
 			zk = new ZKClient(config.getZkConnectString());
 			if (constructPaths()) {
@@ -99,8 +90,6 @@ public class ZKObjectPool<T> implements ObjectPool<T> {
 			taskManager.start();
 		} catch (Exception e) {
 			LOGGER.error("Error while initializing the pool ", e);
-		} finally {
-			ctx.stop();
 		}
 	}
 
@@ -108,7 +97,6 @@ public class ZKObjectPool<T> implements ObjectPool<T> {
 		if (isFull() || shutdown) {
 			return null;
 		}
-		Timer.Context ctx = metrics.timer(name(ZKObjectPool.class, "borrow")).time();
 		T obj = null;
 		String node = null;
 		register();
@@ -125,23 +113,16 @@ public class ZKObjectPool<T> implements ObjectPool<T> {
 		} catch (ZombieException e) {
 			handleZombie(node);
 			obj = borrow();
-		} finally {
-			ctx.stop();
 		}
 		return obj;
 	}
 
 	public void returnObject(T object) {
-		Timer.Context ctx = metrics.timer(name(ZKObjectPool.class, "return")).time();
-		try {
-			String node = borrowed.remove(object);
-			if (node != null) {
-				markUnused(node);
-			} else {
-				LOGGER.error("No node found to return object {} ", object);
-			}
-		} finally {
-			ctx.stop();
+		String node = borrowed.remove(object);
+		if (node != null) {
+			markUnused(node);
+		} else {
+			LOGGER.error("No node found to return object {} ", object);
 		}
 	}
 
@@ -204,7 +185,6 @@ public class ZKObjectPool<T> implements ObjectPool<T> {
 	}
 
 	protected void drop(String node) {
-		Timer.Context ctx = metrics.timer(name(ZKObjectPool.class, "drp")).time();
 		try {
 			if (node != null) {
 				zk.inTransaction().delete(paths.zombies().concat("/").concat(node))
@@ -213,8 +193,6 @@ public class ZKObjectPool<T> implements ObjectPool<T> {
 			}
 		} catch (Exception e) {
 			Throwables.propagate(e);
-		} finally {
-			ctx.stop();
 		}
 	}
 
@@ -267,24 +245,13 @@ public class ZKObjectPool<T> implements ObjectPool<T> {
 		if (node == null) {
 			return null;
 		}
-		Timer.Context ctx = metrics.timer(name(ZKObjectPool.class, "retrieve-data")).time();
-		try {
-			byte[] data = zk.getData(paths.master().concat("/" + node));
-			T desirializedObj = factory.deserialize(data);
-			return desirializedObj;
-		} finally {
-			ctx.stop();
-		}
+		byte[] data = zk.getData(paths.master().concat("/" + node));
+		T desirializedObj = factory.deserialize(data);
+		return desirializedObj;
 	}
 
 	protected List<String> getZombieNodes() {
 		return zk.getChildren(paths.zombies());
-	}
-
-	private void startMetricReporter() {
-		if (config.reportMetrics()) {
-			reporter.start(config.getMetricIntrvl(), config.getIntrvlUnit());
-		}
 	}
 
 	private synchronized void register() {
@@ -372,7 +339,6 @@ public class ZKObjectPool<T> implements ObjectPool<T> {
 
 	private boolean markUsed(String child) {
 		boolean success = false;
-		Timer.Context ctx = metrics.timer(name(ZKObjectPool.class, "mark-used")).time();
 		try {
 			zk.inTransaction().delete(paths.unused().concat("/").concat(child))
 			        .createEphemeral(paths.used().concat("/").concat(child)).commit();
@@ -381,19 +347,8 @@ public class ZKObjectPool<T> implements ObjectPool<T> {
 			// normal, may have missed out on getting the object to borrow.
 		} catch (Exception e) {
 			Throwables.propagate(e);
-		} finally {
-			ctx.stop();
-			recordHitOrMiss(success);
 		}
 		return success;
-	}
-
-	private void recordHitOrMiss(boolean success) {
-		if (success) {
-			metrics.counter(("hit")).inc();
-		} else {
-			metrics.counter(("miss")).inc();
-		}
 	}
 
 	private String find() {
