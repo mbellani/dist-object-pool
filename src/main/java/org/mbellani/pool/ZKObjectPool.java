@@ -48,6 +48,7 @@ public class ZKObjectPool<T> implements ObjectPool<T> {
 		return factory;
 	}
 
+	@Override
 	public void setFactory(ObjectFactory<T> factory) {
 		this.factory = factory;
 	}
@@ -56,6 +57,7 @@ public class ZKObjectPool<T> implements ObjectPool<T> {
 		return zk;
 	}
 
+	@Override
 	public Config getConfig() {
 		return config;
 	}
@@ -64,10 +66,12 @@ public class ZKObjectPool<T> implements ObjectPool<T> {
 		return paths;
 	}
 
+	@Override
 	public int getUnused() {
 		return zk.getStat(paths.unused()).getNumChildren();
 	}
 
+	@Override
 	public int getUsed() {
 		return zk.getStat(paths.used()).getNumChildren();
 	}
@@ -80,19 +84,21 @@ public class ZKObjectPool<T> implements ObjectPool<T> {
 	public void initialize() {
 		try {
 			zk = new ZKClient(config.getZkConnectString());
-			if (constructPaths()) {
-				LOGGER.info("Successfully constructed storage paths, Filling pool to its initial capacity");
-				fill();
-			}
+			fill();
 			register();
 			zk.sync(paths.used(), new Object());
-			taskManager = new TaskManager<T>(this);
-			taskManager.start();
+			startTasks();
 		} catch (Exception e) {
 			LOGGER.error("Error while initializing the pool ", e);
 		}
 	}
 
+	private void startTasks() {
+		taskManager = new TaskManager<T>(this);
+		taskManager.start();
+	}
+
+	@Override
 	public T borrow() {
 		if (isFull() || shutdown) {
 			return null;
@@ -117,6 +123,7 @@ public class ZKObjectPool<T> implements ObjectPool<T> {
 		return obj;
 	}
 
+	@Override
 	public void returnObject(T object) {
 		String node = borrowed.remove(object);
 		if (node != null) {
@@ -126,6 +133,7 @@ public class ZKObjectPool<T> implements ObjectPool<T> {
 		}
 	}
 
+	@Override
 	public boolean invalidate(T object) {
 		String node = borrowed.get(object);
 		boolean destroyed = false;
@@ -143,10 +151,12 @@ public class ZKObjectPool<T> implements ObjectPool<T> {
 		return destroyed;
 	}
 
+	@Override
 	public int getSize() {
 		return zk.getStat(paths.master()).getNumChildren();
 	}
 
+	@Override
 	public void shutdown() {
 		if (shutdown) {
 			return;
@@ -171,6 +181,7 @@ public class ZKObjectPool<T> implements ObjectPool<T> {
 		}
 	}
 
+	@Override
 	public List<String> getParticipants() {
 		List<String> pList = zk.getChildren(paths.participants());
 		List<String> pData = newArrayList();
@@ -271,6 +282,10 @@ public class ZKObjectPool<T> implements ObjectPool<T> {
 	}
 
 	private void fill() {
+		if (!constructPaths()) {
+			return;
+		}
+		LOGGER.info("Successfully constructed storage paths, Filling pool to its initial capacity");
 		for (int i = 0; i < config.getInitSize(); i++) {
 			addNew(paths.unused());
 		}
