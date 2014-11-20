@@ -26,6 +26,7 @@ public class PoolCleanup<T> implements ObjectPoolTask<T> {
         scheduler = new ScheduledThreadPoolExecutor(1);
     }
 
+    @Override
     public void start() {
         Config cfg = pool.getConfig();
         if (cfg.evictionEnabled()) {
@@ -34,6 +35,7 @@ public class PoolCleanup<T> implements ObjectPoolTask<T> {
         }
     }
 
+    @Override
     public void shutdown() {
         scheduler.shutdown();
         try {
@@ -52,6 +54,7 @@ public class PoolCleanup<T> implements ObjectPoolTask<T> {
         private PoolPaths paths;
 
         private Ordering<Stat> sorter = new Ordering<Stat>() {
+            @Override
             public int compare(Stat left, Stat right) {
                 return Longs.compare(left.getMtime(), right.getMtime());
             }
@@ -64,10 +67,12 @@ public class PoolCleanup<T> implements ObjectPoolTask<T> {
             this.paths = pool.getPaths();
         }
 
+        @Override
         public void run() {
             zk.doSynchronized(paths.evictionLock(), this);
         }
 
+        @Override
         @SuppressWarnings("unchecked")
         public Integer perform() throws InterruptedException, KeeperException {
             Map<Stat, String> stats = zk.getChildrenStats(paths.unused());

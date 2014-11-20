@@ -47,6 +47,7 @@ public class ZKClient {
     public void sync(final String path, final Object context) throws InterruptedException {
         final CountDownLatch syncPending = new CountDownLatch(1);
         getZk().sync(path, new VoidCallback() {
+            @Override
             public void processResult(int rc, String path, Object ctx) {
                 syncPending.countDown();
             }
@@ -106,6 +107,7 @@ public class ZKClient {
 
     private Watcher watch() {
         return new Watcher() {
+            @Override
             public void process(WatchedEvent e) {
                 final KeeperState state = e.getState();
                 if (e.getType() == Event.EventType.None && e.getState() == KeeperState.SyncConnected) {

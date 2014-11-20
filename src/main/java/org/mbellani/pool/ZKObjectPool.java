@@ -33,7 +33,8 @@ public class ZKObjectPool<T> implements ObjectPool<T> {
 	private String id;
 	private TaskManager<T> taskManager;
 	private Ordering<String> nodeSorter = new Ordering<String>() {
-		public int compare(String leftNode, String rightNode) {
+		@Override
+        public int compare(String leftNode, String rightNode) {
 			return Ints.compare(Integer.parseInt(leftNode), Integer.parseInt(rightNode));
 		}
 	};
@@ -165,7 +166,8 @@ public class ZKObjectPool<T> implements ObjectPool<T> {
 		try {
 			LOGGER.info("Shutting down pool.");
 			zk.doSynchronized(paths.shutdownLock(), new SynchronizedOperationCallback<Integer>() {
-				public Integer perform() throws InterruptedException, KeeperException {
+				@Override
+                public Integer perform() throws InterruptedException, KeeperException {
 					taskManager.shutdown();
 					LOGGER.info("Dregistering participant.");
 					deregister();

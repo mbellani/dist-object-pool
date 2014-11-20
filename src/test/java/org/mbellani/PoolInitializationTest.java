@@ -162,6 +162,7 @@ public class PoolInitializationTest {
 
         private Runnable runnableFor(final ZKObjectPool<TestObject> pool) {
             return new Runnable() {
+                @Override
                 public void run() {
                     pool.initialize();
                 }

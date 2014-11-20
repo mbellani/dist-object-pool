@@ -65,8 +65,10 @@ public class DoSynchronizeTest {
             this.path = path;
         }
 
+        @Override
         public void run() {
             client.doSynchronized(path, new SynchronizedOperationCallback<Object>() {
+                @Override
                 public Object perform() throws InterruptedException, KeeperException {
                     LOGGER.info("Performing Synchronous Operation.");
                     Thread.sleep(5000);

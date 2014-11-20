@@ -51,6 +51,7 @@ public class ZombieMgr<T> implements ObjectPoolTask<T>, Runnable {
         if (zombies > 0) {
             LOGGER.info("Found {} zombies starting cleanup ", zombies);
             int cleaned = zk.doSynchronized(paths.zombiesLock(), new SynchronizedOperationCallback<Integer>() {
+                @Override
                 public Integer perform() {
                     return cleanup();
                 }

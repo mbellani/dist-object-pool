@@ -12,6 +12,7 @@ import org.junit.runner.RunWith;
 public class InvalidObjectTest {
 
     public static class WhenFactoryMarksAnObjectInvalid extends BaseObjectPoolTest {
+        @Override
         @Before
         public void setUp() throws Exception {
             super.factory = new InvalidatingObjFactory();
@@ -50,6 +51,7 @@ public class InvalidObjectTest {
     }
 
     public static class WhenNoObjectsAreInvalid extends BaseObjectPoolTest {
+        @Override
         @Before
         public void setUp() throws Exception {
             InvalidatingObjFactory factory = new InvalidatingObjFactory();
