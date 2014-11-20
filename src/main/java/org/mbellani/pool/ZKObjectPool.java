@@ -93,7 +93,7 @@ public class ZKObjectPool<T> implements ObjectPool<T> {
 				LOGGER.info("Successfully constructed storage paths, Filling pool to its initial capacity");
 				fill();
 			}
-			registerParticipant();
+			register();
 			zk.sync(paths.used(), new Object());
 			taskManager = new TaskManager<T>(this);
 			taskManager.start();
@@ -111,7 +111,7 @@ public class ZKObjectPool<T> implements ObjectPool<T> {
 		Timer.Context ctx = metrics.timer(name(ZKObjectPool.class, "borrow")).time();
 		T obj = null;
 		String node = null;
-		registerParticipant();
+		register();
 		try {
 			for (;;) {
 				node = find();
@@ -287,7 +287,7 @@ public class ZKObjectPool<T> implements ObjectPool<T> {
 		}
 	}
 
-	private synchronized void registerParticipant() {
+	private synchronized void register() {
 		try {
 			if (!isRegistered()) {
 				String address = getAddress();
