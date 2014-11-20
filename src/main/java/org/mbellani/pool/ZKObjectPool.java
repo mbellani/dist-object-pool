@@ -3,12 +3,8 @@ package org.mbellani.pool;
 import static com.codahale.metrics.MetricRegistry.name;
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.collect.Lists.newArrayList;
+import static org.mbellani.utils.Net.getAddress;
 
-import java.net.Inet4Address;
-import java.net.InetAddress;
-import java.net.NetworkInterface;
-import java.net.UnknownHostException;
-import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -30,8 +26,7 @@ import com.google.common.primitives.Ints;
 
 public class ZKObjectPool<T> implements ObjectPool<T> {
 
-	private static final Logger LOGGER = LoggerFactory
-			.getLogger(ZKObjectPool.class);
+	private static final Logger LOGGER = LoggerFactory.getLogger(ZKObjectPool.class);
 
 	private Config config;
 	private ZKClient zk;
@@ -39,23 +34,19 @@ public class ZKObjectPool<T> implements ObjectPool<T> {
 	private Map<T, String> borrowed = new HashMap<T, String>();
 	private ObjectFactory<T> factory;
 	private boolean shutdown;
-	private String address;
 	private String id;
 	private MetricRegistry metrics = new MetricRegistry();
 	private Slf4jReporter reporter = Slf4jReporter.forRegistry(metrics)
-			.outputTo(LoggerFactory.getLogger("org.mbellani.pool-perf"))
-			.build();
+	        .outputTo(LoggerFactory.getLogger("org.mbellani.pool-perf")).build();
 	private TaskManager<T> taskManager;
 	private Ordering<String> nodeSorter = new Ordering<String>() {
 		public int compare(String leftNode, String rightNode) {
-			return Ints.compare(Integer.parseInt(leftNode),
-					Integer.parseInt(rightNode));
+			return Ints.compare(Integer.parseInt(leftNode), Integer.parseInt(rightNode));
 		}
 	};
 
 	public ZKObjectPool(Config config) {
-		checkArgument(config != null,
-				"Please provide a valid zookeeper configuration.");
+		checkArgument(config != null, "Please provide a valid zookeeper configuration.");
 		config.validate();
 		this.config = config;
 	}
@@ -95,8 +86,7 @@ public class ZKObjectPool<T> implements ObjectPool<T> {
 
 	public void initialize() {
 		startMetricReporter();
-		Timer.Context ctx = metrics.timer(
-				name(ZKObjectPool.class, "Initialization")).time();
+		Timer.Context ctx = metrics.timer(name(ZKObjectPool.class, "Initialization")).time();
 		try {
 			zk = new ZKClient(config.getZkConnectString());
 			if (constructPaths()) {
@@ -118,8 +108,7 @@ public class ZKObjectPool<T> implements ObjectPool<T> {
 		if (isFull() || shutdown) {
 			return null;
 		}
-		Timer.Context ctx = metrics.timer(name(ZKObjectPool.class, "borrow"))
-				.time();
+		Timer.Context ctx = metrics.timer(name(ZKObjectPool.class, "borrow")).time();
 		T obj = null;
 		String node = null;
 		registerParticipant();
@@ -143,8 +132,7 @@ public class ZKObjectPool<T> implements ObjectPool<T> {
 	}
 
 	public void returnObject(T object) {
-		Timer.Context ctx = metrics.timer(name(ZKObjectPool.class, "return"))
-				.time();
+		Timer.Context ctx = metrics.timer(name(ZKObjectPool.class, "return")).time();
 		try {
 			String node = borrowed.remove(object);
 			if (node != null) {
@@ -164,14 +152,11 @@ public class ZKObjectPool<T> implements ObjectPool<T> {
 			try {
 				destroyed = destroyObj(node, object);
 				if (destroyed) {
-					zk.inTransaction()
-							.delete(paths.master().concat("/").concat(node))
-							.delete(paths.used().concat("/").concat(node))
-							.commit();
+					zk.inTransaction().delete(paths.master().concat("/").concat(node))
+					        .delete(paths.used().concat("/").concat(node)).commit();
 				}
 			} catch (Exception e) {
-				LOGGER.error("Error destroying the object {} due to {}",
-						object, e);
+				LOGGER.error("Error destroying the object {} due to {}", object, e);
 			}
 		}
 		return destroyed;
@@ -188,19 +173,17 @@ public class ZKObjectPool<T> implements ObjectPool<T> {
 		shutdown = true;
 		try {
 			LOGGER.info("Shutting down pool.");
-			zk.doSynchronized(paths.shutdownLock(),
-					new SynchronizedOperationCallback<Integer>() {
-						public Integer perform() throws InterruptedException,
-								KeeperException {
-							taskManager.shutdown();
-							LOGGER.info("Dregistering participant.");
-							deregister();
-							int participantsLeft = getParticipants().size();
-							destroyAllObjects(participantsLeft);
-							return participantsLeft;
-						}
+			zk.doSynchronized(paths.shutdownLock(), new SynchronizedOperationCallback<Integer>() {
+				public Integer perform() throws InterruptedException, KeeperException {
+					taskManager.shutdown();
+					LOGGER.info("Dregistering participant.");
+					deregister();
+					int participantsLeft = getParticipants().size();
+					destroyAllObjects(participantsLeft);
+					return participantsLeft;
+				}
 
-					});
+			});
 			zk.shutdown();
 		} catch (Exception e) {
 			Throwables.propagate(e);
@@ -213,8 +196,7 @@ public class ZKObjectPool<T> implements ObjectPool<T> {
 		if (pList != null && !pList.isEmpty()) {
 			for (String p : pList) {
 				byte[] data = zk.getData(paths.participants().concat("/" + p));
-				String converted = data == null ? "address-unknown"
-						: new String(data);
+				String converted = data == null ? "address-unknown" : new String(data);
 				pData.add(converted);
 			}
 		}
@@ -222,14 +204,12 @@ public class ZKObjectPool<T> implements ObjectPool<T> {
 	}
 
 	protected void drop(String node) {
-		Timer.Context ctx = metrics.timer(name(ZKObjectPool.class, "drp"))
-				.time();
+		Timer.Context ctx = metrics.timer(name(ZKObjectPool.class, "drp")).time();
 		try {
 			if (node != null) {
-				zk.inTransaction()
-						.delete(paths.zombies().concat("/").concat(node))
-						.delete(paths.master().concat("/").concat(node))
-						.delete(paths.used().concat("/").concat(node)).commit();
+				zk.inTransaction().delete(paths.zombies().concat("/").concat(node))
+				        .delete(paths.master().concat("/").concat(node)).delete(paths.used().concat("/").concat(node))
+				        .commit();
 			}
 		} catch (Exception e) {
 			Throwables.propagate(e);
@@ -272,11 +252,8 @@ public class ZKObjectPool<T> implements ObjectPool<T> {
 		try {
 			String zombie_node = paths.zombies().concat("/").concat(node);
 			if (zk.exists(zombie_node)) {
-				zk.inTransaction()
-						.delete(paths.used().concat("/").concat(node))
-						.delete(zombie_node)
-						.create(paths.unused().concat("/").concat(node))
-						.commit();
+				zk.inTransaction().delete(paths.used().concat("/").concat(node)).delete(zombie_node)
+				        .create(paths.unused().concat("/").concat(node)).commit();
 			}
 		} catch (KeeperException.NoNodeException e) {
 			// It's ok, node may not be a zombie.
@@ -290,8 +267,7 @@ public class ZKObjectPool<T> implements ObjectPool<T> {
 		if (node == null) {
 			return null;
 		}
-		Timer.Context ctx = metrics.timer(
-				name(ZKObjectPool.class, "retrieve-data")).time();
+		Timer.Context ctx = metrics.timer(name(ZKObjectPool.class, "retrieve-data")).time();
 		try {
 			byte[] data = zk.getData(paths.master().concat("/" + node));
 			T desirializedObj = factory.deserialize(data);
@@ -315,8 +291,7 @@ public class ZKObjectPool<T> implements ObjectPool<T> {
 		try {
 			if (!isRegistered()) {
 				String address = getAddress();
-				String path = zk.createEphemeralSeq(paths.participants()
-						.concat("/"), address.getBytes());
+				String path = zk.createEphemeralSeq(paths.participants().concat("/"), address.getBytes());
 				id = path.substring(path.lastIndexOf("/") + 1);
 			}
 		} catch (Exception e) {
@@ -325,8 +300,7 @@ public class ZKObjectPool<T> implements ObjectPool<T> {
 	}
 
 	private boolean isRegistered() {
-		return id != null
-				&& (zk.exists(paths.participants().concat("/").concat(id)));
+		return id != null && (zk.exists(paths.participants().concat("/").concat(id)));
 	}
 
 	private void fill() {
@@ -378,8 +352,7 @@ public class ZKObjectPool<T> implements ObjectPool<T> {
 		String dataNode = null;
 		try {
 			// Taking a bit of risk here by not using transaction.
-			String path = zk
-					.createSeq(paths.master().concat("/"), createData());
+			String path = zk.createSeq(paths.master().concat("/"), createData());
 			dataNode = path.substring(path.lastIndexOf("/") + 1);
 			zk.create(toPath.concat("/").concat(dataNode));
 		} catch (Exception e) {
@@ -391,7 +364,7 @@ public class ZKObjectPool<T> implements ObjectPool<T> {
 	private void markUnused(String node) {
 		try {
 			zk.inTransaction().delete(paths.used().concat("/").concat(node))
-					.create(paths.unused().concat("/").concat(node)).commit();
+			        .create(paths.unused().concat("/").concat(node)).commit();
 		} catch (Exception e) {
 			Throwables.propagate(e);
 		}
@@ -399,12 +372,10 @@ public class ZKObjectPool<T> implements ObjectPool<T> {
 
 	private boolean markUsed(String child) {
 		boolean success = false;
-		Timer.Context ctx = metrics
-				.timer(name(ZKObjectPool.class, "mark-used")).time();
+		Timer.Context ctx = metrics.timer(name(ZKObjectPool.class, "mark-used")).time();
 		try {
 			zk.inTransaction().delete(paths.unused().concat("/").concat(child))
-					.createEphemeral(paths.used().concat("/").concat(child))
-					.commit();
+			        .createEphemeral(paths.used().concat("/").concat(child)).commit();
 			success = true;
 		} catch (KeeperException.NoNodeException e) {
 			// normal, may have missed out on getting the object to borrow.
@@ -456,8 +427,7 @@ public class ZKObjectPool<T> implements ObjectPool<T> {
 		int unused = unusedObjectPaths.size();
 		int limit = (int) (used * 0.4);
 		limit = limit != 0 && limit < unused ? limit : unused;
-		return limit > 0 ? (int) ((System.nanoTime() ^ Thread.currentThread()
-				.hashCode()) % limit) : -1;
+		return limit > 0 ? (int) ((System.nanoTime() ^ Thread.currentThread().hashCode()) % limit) : -1;
 	}
 
 	private List<String> unusedObjectPaths() {
@@ -470,14 +440,11 @@ public class ZKObjectPool<T> implements ObjectPool<T> {
 
 	private void checkBorrowed() {
 		if (!borrowed.isEmpty()) {
-			LOGGER.warn(
-					"There are {} objects still in use , proceeding with shutdown",
-					borrowed.size());
+			LOGGER.warn("There are {} objects still in use , proceeding with shutdown", borrowed.size());
 		}
 	}
 
-	private void destroyAllObjects(int partcipantsLeft)
-			throws InterruptedException, KeeperException {
+	private void destroyAllObjects(int partcipantsLeft) throws InterruptedException, KeeperException {
 		checkBorrowed();
 		if (partcipantsLeft == 0) {
 			LOGGER.info("No participants left in the pool, cleaning up.");
@@ -487,11 +454,9 @@ public class ZKObjectPool<T> implements ObjectPool<T> {
 			}
 			zk.inTransaction().deleteRecursive(paths.base()).commit();
 		} else {
-			LOGGER.info(
-					"There are still {} participants in the pool, leaving pool intact.",
-					partcipantsLeft);
+			LOGGER.info("There are still {} participants in the pool, leaving pool intact.", partcipantsLeft);
 		}
-	
+
 	}
 
 	private void deregister() {
@@ -517,39 +482,6 @@ public class ZKObjectPool<T> implements ObjectPool<T> {
 			LOGGER.error("Error destroying the object {} due to {}", object, e);
 		}
 		return destroyed;
-	}
-
-	private String pickAddressFromInterfaces() {
-		String pick = null;
-		try {
-			Enumeration<NetworkInterface> nics = NetworkInterface
-					.getNetworkInterfaces();
-			while (nics.hasMoreElements()) {
-				NetworkInterface nic = nics.nextElement();
-				Enumeration<InetAddress> adrs = nic.getInetAddresses();
-				while (adrs.hasMoreElements()) {
-					InetAddress adr = adrs.nextElement();
-					if (adr instanceof Inet4Address && adr.isSiteLocalAddress()) {
-						pick = adr.getHostAddress();
-					}
-				}
-			}
-			return pick;
-		} catch (Exception ex) {
-			throw new RuntimeException(ex);
-		}
-	}
-
-	private String getAddress() {
-		if (address != null) {
-			return address;
-		}
-	
-		try {
-			return InetAddress.getLocalHost().getHostAddress();
-		} catch (UnknownHostException ex) {
-			return pickAddressFromInterfaces();
-		}
 	}
 
 }
